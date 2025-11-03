@@ -1,12 +1,12 @@
 "use client"
 import {openHallidayPayments} from "@halliday-sdk/payments"
 import {connectSigner} from "@halliday-sdk/payments/ethers"
-import {useState, useEffect, useMemo, useCallback, useRef} from "react"
+import {useState, useEffect, useMemo} from "react"
 import {DynamicWidget, useDynamicContext} from "@dynamic-labs/sdk-react-core"
 import {useWalletClient, useSwitchChain} from "wagmi"
 import {createEip1193ProviderFromWallet} from "./utils/viem-signer-adapter"
 import {BrowserProvider} from "ethers"
-import {aeneid, mainnet} from "@story-protocol/core-sdk"
+import {mainnet} from "@story-protocol/core-sdk"
 
 export default function Home() {
   const {primaryWallet} = useDynamicContext()
@@ -15,10 +15,6 @@ export default function Home() {
   const {switchChain} = useSwitchChain()
   const [error, setError] = useState<string | null>(null)
   const [isSwitchingNetwork, setIsSwitchingNetwork] = useState(false)
-  const maskedProviderRef = useRef<{
-    original: unknown
-    hadProperty: boolean
-  } | null>(null)
   const [isHallidayOpen, setIsHallidayOpen] = useState(false)
 
   // Create a stable EIP-1193 provider from the wallet client
