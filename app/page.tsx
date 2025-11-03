@@ -59,21 +59,21 @@ export default function Home() {
       !isSwitchingNetwork
     ) {
       console.log(
-        `Wallet on wrong network (chain ${walletClient.chain?.id}). Switching to Story Aeneid (${aeneid.id})...`
+        `Wallet on wrong network (chain ${walletClient.chain?.id}). Switching to Story Mainnet (${mainnet.id})...`
       )
       setIsSwitchingNetwork(true)
       try {
         switchChain(
-          {chainId: aeneid.id},
+          {chainId: mainnet.id},
           {
             onSuccess: () => {
-              console.log("Successfully switched to Story Aeneid")
+              console.log("Successfully switched to Story Mainnet")
               setIsSwitchingNetwork(false)
             },
             onError: error => {
               console.error("Failed to switch network:", error)
               setError(
-                `Please manually switch your wallet to Story Protocol Testnet (Chain ID: ${aeneid.id})`
+                `Please manually switch your wallet to Story Protocol Mainnet (Chain ID: ${mainnet.id})`
               )
               setIsSwitchingNetwork(false)
             },
@@ -94,24 +94,6 @@ export default function Home() {
     isSwitchingNetwork,
   ])
 
-  const restoreMaskedProvider = useCallback(() => {
-    const current = maskedProviderRef.current
-    if (!current) return
-    const windowWithEthereum = window as typeof window & {
-      ethereum?: unknown
-    }
-
-    if (current.hadProperty) {
-      console.log("[Halliday] Restoring prior window.ethereum provider")
-      windowWithEthereum.ethereum = current.original
-    } else {
-      console.log("[Halliday] Removing injected window.ethereum")
-      delete windowWithEthereum.ethereum
-    }
-
-    maskedProviderRef.current = null
-  }, [])
-
   useEffect(() => {
     if (!isHallidayOpen) return
 
@@ -120,7 +102,6 @@ export default function Home() {
       if (data?.type === "EVENT_WINDOW_CLOSE") {
         console.log("[Halliday] Widget reported close event")
         setIsHallidayOpen(false)
-        restoreMaskedProvider()
       }
     }
 
@@ -128,7 +109,7 @@ export default function Home() {
     return () => {
       window.removeEventListener("message", handleWidgetMessages)
     }
-  }, [isHallidayOpen, restoreMaskedProvider])
+  }, [isHallidayOpen])
 
   const handlePayWithHalliday = async () => {
     if (!primaryWallet || !walletClient || !eip1193Provider) {
@@ -139,41 +120,6 @@ export default function Home() {
     try {
       const address = primaryWallet.address
       console.log("Opening Halliday popup for address:", address)
-
-      // Mask MetaMask before opening Halliday
-      const windowWithEthereum = window as typeof window & {
-        ethereum?: unknown
-      }
-      const hadProperty = Object.prototype.hasOwnProperty.call(
-        windowWithEthereum,
-        "ethereum"
-      )
-      const originalEthereum = windowWithEthereum.ethereum
-
-      if (
-        originalEthereum &&
-        typeof originalEthereum === "object" &&
-        "isMetaMask" in originalEthereum
-      ) {
-        console.log(
-          "[Halliday] Replacing MetaMask provider with Dynamic signer"
-        )
-        maskedProviderRef.current = {
-          original: originalEthereum,
-          hadProperty,
-        }
-
-        try {
-          delete windowWithEthereum.ethereum
-        } catch (deleteError) {
-          console.warn(
-            "[Halliday] Unable to delete window.ethereum before replacement",
-            deleteError
-          )
-        }
-
-        windowWithEthereum.ethereum = eip1193Provider
-      }
 
       setIsHallidayOpen(true)
 
@@ -216,19 +162,11 @@ export default function Home() {
       )
 
       setIsHallidayOpen(false)
-      restoreMaskedProvider()
     }
   }
 
-  // Cleanup: Restore MetaMask when component unmounts
-  useEffect(() => {
-    return () => {
-      restoreMaskedProvider()
-    }
-  }, [restoreMaskedProvider])
-
   return (
-    <div className='flex flex-col items-center justify-center min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100'>
+    <div className='flex flex-col items-center justify-center min-h-screen bg-linear-to-br from-blue-50 to-indigo-100'>
       <div className='absolute top-4 right-4 z-50'>
         <DynamicWidget />
       </div>
@@ -338,7 +276,7 @@ export default function Home() {
               <button
                 onClick={handlePayWithHalliday}
                 disabled={!eip1193Provider}
-                className='w-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-semibold py-4 px-6 rounded-xl shadow-lg hover:shadow-xl transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed'
+                className='w-full bg-linear-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-semibold py-4 px-6 rounded-xl shadow-lg hover:shadow-xl transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed'
               >
                 Fund with Halliday
               </button>
