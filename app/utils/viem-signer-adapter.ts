@@ -24,6 +24,52 @@ function createEip1193Provider(walletClient: WalletClient): Eip1193Provider {
         return chainId
       }
 
+      if (method === "wallet_switchEthereumChain") {
+        const [switchParams] = (params ?? []) as [{chainId: string}] | []
+        const requestedChainIdHex = switchParams?.chainId ?? ""
+        const requestedChainId = Number.parseInt(
+          requestedChainIdHex.replace(/^0x/i, ""),
+          16
+        )
+        const currentChainId = walletClient.chain?.id
+
+        if (requestedChainId && currentChainId !== requestedChainId) {
+          console.warn(
+            "[EIP-1193] Received wallet_switchEthereumChain for chain",
+            requestedChainId,
+            "but wallet is on",
+            currentChainId,
+            "- deferring to walletClient.switchChain if available"
+          )
+
+          const switchChain = (walletClient as unknown as {
+            switchChain?: (args: {id: number}) => Promise<void>
+          }).switchChain
+
+          if (typeof switchChain === "function") {
+            await switchChain({id: requestedChainId})
+          } else {
+            console.warn(
+              "[EIP-1193] walletClient.switchChain unavailable; assuming caller has already enforced the correct network"
+            )
+          }
+        } else {
+          console.log(
+            "[EIP-1193] wallet_switchEthereumChain noop - already on requested chain",
+            currentChainId
+          )
+        }
+
+        return null
+      }
+
+      if (method === "wallet_addEthereumChain") {
+        console.log(
+          "[EIP-1193] wallet_addEthereumChain requested - Dynamic wallet manages chains internally"
+        )
+        return null
+      }
+
       if (method === "eth_signTypedData_v4") {
         const [, typedDataJson] = params as [string, string]
         const typedData = JSON.parse(typedDataJson)

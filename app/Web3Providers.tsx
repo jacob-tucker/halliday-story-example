@@ -6,14 +6,14 @@ import {DynamicContextProvider} from "@dynamic-labs/sdk-react-core"
 import {DynamicWagmiConnector} from "@dynamic-labs/wagmi-connector"
 import {EthereumWalletConnectors} from "@dynamic-labs/ethereum"
 import {PropsWithChildren} from "react"
-import {aeneid} from "@story-protocol/core-sdk"
+import {mainnet} from "@story-protocol/core-sdk"
 
 // Configure Wagmi with Story Aeneid testnet
 const config = createConfig({
-  chains: [aeneid],
+  chains: [mainnet],
   multiInjectedProviderDiscovery: false,
   transports: {
-    [aeneid.id]: http(),
+    [mainnet.id]: http(),
   },
 })
 
@@ -30,19 +30,19 @@ export default function Web3Providers({children}: PropsWithChildren) {
         overrides: {
           evmNetworks: () => [
             {
-              blockExplorerUrls: ["https://aeneid.storyscan.xyz/"],
-              chainId: aeneid.id,
-              chainName: aeneid.name,
+              blockExplorerUrls: ["https://storyscan.xyz/"],
+              chainId: mainnet.id,
+              chainName: mainnet.name,
               iconUrls: ["https://story.foundation/favicon.ico"],
-              name: "Story Protocol Testnet",
+              name: "Story Protocol Mainnet",
               nativeCurrency: {
-                name: aeneid.nativeCurrency.name,
-                symbol: aeneid.nativeCurrency.symbol,
-                decimals: aeneid.nativeCurrency.decimals,
+                name: mainnet.nativeCurrency.name,
+                symbol: mainnet.nativeCurrency.symbol,
+                decimals: mainnet.nativeCurrency.decimals,
               },
-              networkId: aeneid.id,
-              rpcUrls: [...aeneid.rpcUrls.default.http],
-              vanityName: "Story Aeneid",
+              networkId: mainnet.id,
+              rpcUrls: [...mainnet.rpcUrls.default.http],
+              vanityName: "Story Protocol Mainnet",
             },
           ],
         },

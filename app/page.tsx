@@ -1,13 +1,12 @@
 "use client"
 import {openHallidayPayments} from "@halliday-sdk/payments"
 import {connectSigner} from "@halliday-sdk/payments/ethers"
-
-import {useState, useEffect, useMemo} from "react"
+import {useState, useEffect, useMemo, useCallback, useRef} from "react"
 import {DynamicWidget, useDynamicContext} from "@dynamic-labs/sdk-react-core"
 import {useWalletClient, useSwitchChain} from "wagmi"
 import {createEip1193ProviderFromWallet} from "./utils/viem-signer-adapter"
 import {BrowserProvider} from "ethers"
-import {aeneid} from "@story-protocol/core-sdk"
+import {aeneid, mainnet} from "@story-protocol/core-sdk"
 
 export default function Home() {
   const {primaryWallet} = useDynamicContext()
@@ -16,16 +15,16 @@ export default function Home() {
   const {switchChain} = useSwitchChain()
   const [error, setError] = useState<string | null>(null)
   const [isSwitchingNetwork, setIsSwitchingNetwork] = useState(false)
-  const [maskedEthereum, setMaskedEthereum] = useState<unknown>(null)
+  const maskedProviderRef = useRef<{
+    original: unknown
+    hadProperty: boolean
+  } | null>(null)
+  const [isHallidayOpen, setIsHallidayOpen] = useState(false)
 
   // Create a stable EIP-1193 provider from the wallet client
   const eip1193Provider = useMemo(() => {
     if (!walletClient) return null
     try {
-      console.log("Creating EIP-1193 provider from walletClient:", {
-        address: walletClient.account?.address,
-        chain: walletClient.chain,
-      })
       return createEip1193ProviderFromWallet(walletClient)
     } catch (error) {
       console.error("Error creating EIP-1193 provider:", error)
@@ -55,7 +54,7 @@ export default function Home() {
 
     // Check if wallet is on the wrong network and switch to Story Aeneid
     if (
-      walletClient.chain?.id !== aeneid.id &&
+      walletClient.chain?.id !== mainnet.id &&
       switchChain &&
       !isSwitchingNetwork
     ) {
@@ -95,6 +94,42 @@ export default function Home() {
     isSwitchingNetwork,
   ])
 
+  const restoreMaskedProvider = useCallback(() => {
+    const current = maskedProviderRef.current
+    if (!current) return
+    const windowWithEthereum = window as typeof window & {
+      ethereum?: unknown
+    }
+
+    if (current.hadProperty) {
+      console.log("[Halliday] Restoring prior window.ethereum provider")
+      windowWithEthereum.ethereum = current.original
+    } else {
+      console.log("[Halliday] Removing injected window.ethereum")
+      delete windowWithEthereum.ethereum
+    }
+
+    maskedProviderRef.current = null
+  }, [])
+
+  useEffect(() => {
+    if (!isHallidayOpen) return
+
+    const handleWidgetMessages = (event: MessageEvent) => {
+      const {data} = event
+      if (data?.type === "EVENT_WINDOW_CLOSE") {
+        console.log("[Halliday] Widget reported close event")
+        setIsHallidayOpen(false)
+        restoreMaskedProvider()
+      }
+    }
+
+    window.addEventListener("message", handleWidgetMessages)
+    return () => {
+      window.removeEventListener("message", handleWidgetMessages)
+    }
+  }, [isHallidayOpen, restoreMaskedProvider])
+
   const handlePayWithHalliday = async () => {
     if (!primaryWallet || !walletClient || !eip1193Provider) {
       setError("Please connect your wallet first")
@@ -109,6 +144,10 @@ export default function Home() {
       const windowWithEthereum = window as typeof window & {
         ethereum?: unknown
       }
+      const hadProperty = Object.prototype.hasOwnProperty.call(
+        windowWithEthereum,
+        "ethereum"
+      )
       const originalEthereum = windowWithEthereum.ethereum
 
       if (
@@ -116,13 +155,27 @@ export default function Home() {
         typeof originalEthereum === "object" &&
         "isMetaMask" in originalEthereum
       ) {
-        console.log("[Halliday] Masking MetaMask provider before opening popup")
-        setMaskedEthereum(originalEthereum)
-        delete windowWithEthereum.ethereum
+        console.log(
+          "[Halliday] Replacing MetaMask provider with Dynamic signer"
+        )
+        maskedProviderRef.current = {
+          original: originalEthereum,
+          hadProperty,
+        }
 
-        // Wait a bit to ensure the deletion takes effect
-        await new Promise(resolve => setTimeout(resolve, 100))
+        try {
+          delete windowWithEthereum.ethereum
+        } catch (deleteError) {
+          console.warn(
+            "[Halliday] Unable to delete window.ethereum before replacement",
+            deleteError
+          )
+        }
+
+        windowWithEthereum.ethereum = eip1193Provider
       }
+
+      setIsHallidayOpen(true)
 
       // Create a stable BrowserProvider that wraps our EIP-1193 provider
       const browserProvider = new BrowserProvider(eip1193Provider)
@@ -142,54 +195,37 @@ export default function Home() {
         sandbox: false,
         // Popup mode - no targetElementId needed
         windowType: "POPUP" as const,
+        statusCallback: payload => {
+          console.log("[Halliday][statusCallback]", payload)
+        },
         owner: {
           address,
           ...connectedSigner,
         },
         funder: {
+          address,
           ...connectedSigner,
         },
       })
 
       console.log("[Halliday] Popup opened successfully for:", address)
-
-      // Keep MetaMask masked for 5 seconds to ensure Halliday locks onto the custom signer
-      setTimeout(() => {
-        if (maskedEthereum) {
-          console.log(
-            "[Halliday] Restoring MetaMask after Halliday initialization"
-          )
-          // @ts-expect-error - Restoring the original ethereum provider
-          window.ethereum = maskedEthereum
-          setMaskedEthereum(null)
-        }
-      }, 5000)
     } catch (error) {
       console.error("Error opening Halliday:", error)
       setError(
         error instanceof Error ? error.message : "Failed to open Halliday"
       )
 
-      // Restore MetaMask on error
-      if (maskedEthereum) {
-        console.log("[Halliday] Restoring MetaMask after error")
-        // @ts-expect-error - Restoring the original ethereum provider
-        window.ethereum = maskedEthereum
-        setMaskedEthereum(null)
-      }
+      setIsHallidayOpen(false)
+      restoreMaskedProvider()
     }
   }
 
   // Cleanup: Restore MetaMask when component unmounts
   useEffect(() => {
     return () => {
-      if (maskedEthereum) {
-        console.log("[Halliday] Restoring MetaMask on cleanup")
-        // @ts-expect-error - Restoring the original ethereum provider
-        window.ethereum = maskedEthereum
-      }
+      restoreMaskedProvider()
     }
-  }, [maskedEthereum])
+  }, [restoreMaskedProvider])
 
   return (
     <div className='flex flex-col items-center justify-center min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100'>
