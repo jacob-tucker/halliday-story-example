@@ -48,7 +48,6 @@ export default function Home() {
       return
     }
 
-    // Check if wallet is on the wrong network and switch to Story Aeneid
     if (
       walletClient.chain?.id !== mainnet.id &&
       switchChain &&
